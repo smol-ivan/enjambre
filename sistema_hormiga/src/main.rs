@@ -22,7 +22,7 @@ impl Hormiga {
 }
 
 fn algoritmo_inicializacion(
-    conjunto_aristas: Base,
+    conjunto_aristas: &Base,
     cantidad_hormigas: usize,
     inicio: Nodo,
 ) -> (Feromonas, Hormigas) {
@@ -49,7 +49,7 @@ fn algoritmo_inicializacion(
 fn seleccion_ruleta(
     origen: Nodo,
     mut vertices_factibles: Camino,
-    feromonas: Feromonas,
+    feromonas: &Feromonas,
 ) -> Option<Nodo> {
     let mut rng = rand::rng();
     // Generar umbral aleatorio
@@ -66,7 +66,6 @@ fn seleccion_ruleta(
     }
 
     loop {
-        println!("Vertices factibles: {:?}", vertices_factibles);
         if vertices_factibles.len() == 1 {
             return vertices_factibles.last().copied();
         }
@@ -85,17 +84,50 @@ fn seleccion_ruleta(
     }
 }
 
+fn construccion_caminos(
+    conjunto_aristas: &Base,
+    feromonas: &Feromonas,
+    hormigas: &mut Hormigas,
+    destino: Nodo,
+) {
+    for hormiga in hormigas.iter_mut() {
+        loop {
+            let origen = hormiga.camino.last().unwrap();
+
+            if *origen == destino {
+                break;
+            }
+
+            // Evitar volver a los mismo nodos si ya fueron visitados
+            let visitados = &hormiga.camino;
+            let vecinos: &Camino = &conjunto_aristas[*origen as usize];
+            let vertices_factibles: Camino = vecinos
+                .iter()
+                .copied()
+                .filter(|nodo| !visitados.contains(nodo))
+                .collect();
+
+            if vertices_factibles.is_empty() {
+                break;
+            }
+
+            let siguiente = seleccion_ruleta(*origen, vertices_factibles, &feromonas.to_vec());
+            hormiga.camino.push(siguiente.unwrap());
+        }
+    }
+}
+
 fn sistema_hormigas(n_hormigas: usize, inicio: Nodo, destino: Nodo) {
     // EJEMPLO
     let conjunto_aristas: Vec<Vec<Nodo>> =
         vec![vec![1, 2, 3], vec![3, 4], vec![1], vec![0, 4], vec![2]];
-    let (feromonas, hormigas) = algoritmo_inicializacion(conjunto_aristas, n_hormigas, inicio);
+    let (feromonas, mut hormigas) = algoritmo_inicializacion(&conjunto_aristas, n_hormigas, inicio);
     println!("{:?}", feromonas);
     println!("{:?}", hormigas);
+    construccion_caminos(&conjunto_aristas, &feromonas, &mut hormigas, destino);
 
-    let vertices_factibles = vec![1, 2, 3];
-    let j = seleccion_ruleta(inicio, vertices_factibles, feromonas);
-    println!("El nodo seleccionado fue: {}", j.unwrap());
+    println!("{:?}", feromonas);
+    println!("{:?}", hormigas);
 }
 
 fn main() {

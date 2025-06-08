@@ -102,14 +102,17 @@ pub fn construccion_caminos(
             // NOTE: Esto evita que existan ciclos en el camino que forma la hormiga
             let visitados = &hormiga.camino;
             let vecinos: &Camino = &conjunto_aristas[*origen as usize];
-            let vertices_factibles: Camino = vecinos
+            let mut vertices_factibles: Camino = vecinos
                 .iter()
                 .copied()
                 .filter(|nodo| !visitados.contains(nodo))
                 .collect();
 
-            if vertices_factibles.is_empty() {
-                break;
+            // La hormiga esta atrapada en un nodo sin salidas
+            if vertices_factibles.is_empty() && hormiga.camino.len() > 1 {
+                // Retroceder antes de toparse con el camino muerto
+                let anterior = hormiga.camino[hormiga.camino.len() - 2];
+                vertices_factibles.push(anterior);
             }
 
             let siguiente = seleccion_ruleta(*origen, vertices_factibles, &feromonas.to_vec());

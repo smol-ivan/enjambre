@@ -99,6 +99,7 @@ pub fn construccion_caminos(
             }
 
             // Evitar volver a los mismo nodos si ya fueron visitados
+            // NOTE: Esto evita que existan ciclos en el camino que forma la hormiga
             let visitados = &hormiga.camino;
             let vecinos: &Camino = &conjunto_aristas[*origen as usize];
             let vertices_factibles: Camino = vecinos

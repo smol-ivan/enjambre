@@ -7,6 +7,8 @@ pub type Base = Vec<Vec<Nodo>>;
 pub type Feromonas = Vec<HashMap<Nodo, Peso>>;
 pub type Camino = Vec<Nodo>;
 pub type Hormigas = Vec<Hormiga>;
+pub type EvaluacionCaminos = Vec<usize>;
+pub type Rho = f64;
 
 #[derive(Debug)]
 pub struct Hormiga {
@@ -21,11 +23,7 @@ impl Hormiga {
     }
 }
 
-pub fn algoritmo_inicializacion(
-    conjunto_aristas: &Base,
-    cantidad_hormigas: usize,
-    inicio: Nodo,
-) -> (Feromonas, Hormigas) {
+pub fn algoritmo_inicializacion(conjunto_aristas: &Base) -> Feromonas {
     // Agregar valores aletatorios de feromonas en las aristas
     let mut feromonas: Feromonas = vec![HashMap::new(); conjunto_aristas.len()];
     for (index, conexiones_vecinos) in conjunto_aristas.iter().enumerate() {
@@ -38,12 +36,17 @@ pub fn algoritmo_inicializacion(
             feromonas[index].insert(*conexion, feromona);
         }
     }
+
+    feromonas
+}
+
+pub fn inicializacion_hormigas(cantidad_hormigas: usize, inicio: Nodo) -> Hormigas {
     // Inicializacion de hormigas en punto inicial
     let mut hormigas: Hormigas = Vec::with_capacity(cantidad_hormigas);
     for _ in 0..cantidad_hormigas {
         hormigas.push(Hormiga::new(inicio));
     }
-    (feromonas, hormigas)
+    hormigas
 }
 
 pub fn seleccion_ruleta(
@@ -117,6 +120,45 @@ pub fn construccion_caminos(
 
             let siguiente = seleccion_ruleta(*origen, vertices_factibles, &feromonas.to_vec());
             hormiga.camino.push(siguiente.unwrap());
+        }
+    }
+}
+
+pub fn evaluacion_caminos(hormigas: &Hormigas) -> EvaluacionCaminos {
+    let mut evaluacion_caminos = Vec::with_capacity(hormigas.len());
+    for hormiga in hormigas.iter() {
+        evaluacion_caminos.push(hormiga.camino.len());
+    }
+    evaluacion_caminos
+}
+
+pub fn actualizacion_feromona(
+    hormigas: &Hormigas,
+    feromonas: &mut Feromonas,
+    evaluacion_caminos: &EvaluacionCaminos,
+) {
+    for (index, hormiga) in hormigas.iter().enumerate() {
+        // Aportacion segun la inversa de la evaluacion del camino
+        let aportacion: f64 = 1.0 / evaluacion_caminos[index] as f64;
+        let camino = &hormiga.camino;
+        // Para cada arista de nuestro camino
+        for ventana in camino.windows(2) {
+            let origen = ventana[0] as usize;
+            let destino = ventana[1];
+
+            if let Some(peso) = feromonas[origen].get_mut(&destino) {
+                *peso += aportacion;
+            }
+        }
+    }
+}
+
+pub fn evapozacion_feromona(conjunto_aristas: &Base, feromonas: &mut Feromonas, p: Rho) {
+    for (origen, vecinos) in conjunto_aristas.iter().enumerate() {
+        for vecino in vecinos.iter() {
+            if let Some(peso) = feromonas[origen].get_mut(&(*vecino as i32)) {
+                *peso *= 1.0 - p;
+            }
         }
     }
 }

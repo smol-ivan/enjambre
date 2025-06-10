@@ -7,13 +7,31 @@ fn sistema_hormigas(n_hormigas: usize, inicio: Nodo, destino: Nodo) {
     // EJEMPLO
     let conjunto_aristas: Vec<Vec<Nodo>> =
         vec![vec![1, 2, 3], vec![3, 4], vec![1], vec![0, 4], vec![2]];
-    let (feromonas, mut hormigas) = algoritmo_inicializacion(&conjunto_aristas, n_hormigas, inicio);
-    println!("{:?}", feromonas);
-    println!("{:?}", hormigas);
-    construccion_caminos(&conjunto_aristas, &feromonas, &mut hormigas, destino);
+    let p: Rho = 0.6;
 
-    println!("{:?}", feromonas);
-    println!("{:?}", hormigas);
+    let max_iteraciones = 10;
+    let mut i = 0;
+
+    let mut feromonas = algoritmo_inicializacion(&conjunto_aristas);
+
+    let mut camino_minimo: Camino = Vec::new();
+
+    loop {
+        if i <= max_iteraciones {
+            break;
+        }
+        i += 1;
+        let mut hormigas = inicializacion_hormigas(n_hormigas, inicio);
+        construccion_caminos(&conjunto_aristas, &feromonas, &mut hormigas, destino);
+
+        let evaluacion_caminos = evaluacion_caminos(&hormigas);
+
+        evapozacion_feromona(&conjunto_aristas, &mut feromonas, p);
+
+        actualizacion_feromona(&hormigas, &mut feromonas, &evaluacion_caminos);
+    }
+    // Mostrar camino minimo
+    
 }
 
 fn main() {
@@ -42,10 +60,7 @@ fn main() {
         return;
     }
 
-    println!(
-        "Sistema de hormigas inicializado con {} hormigas.",
-        n_hormigas
-    );
+    println!("Total_hormigas: {} hormigas.", n_hormigas);
 
     sistema_hormigas(n_hormigas, inicio, destino);
 }

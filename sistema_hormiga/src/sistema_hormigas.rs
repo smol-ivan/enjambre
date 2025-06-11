@@ -12,7 +12,7 @@ pub type Rho = f64;
 
 #[derive(Debug)]
 pub struct Hormiga {
-    camino: Camino,
+    pub camino: Camino,
 }
 
 impl Hormiga {
@@ -51,7 +51,7 @@ pub fn inicializacion_hormigas(cantidad_hormigas: usize, inicio: Nodo) -> Hormig
 
 pub fn seleccion_ruleta(
     origen: Nodo,
-    mut vertices_factibles: Camino,
+    vertices_factibles: &mut Camino,
     feromonas: &Feromonas,
 ) -> Option<Nodo> {
     let mut rng = rand::rng();
@@ -87,6 +87,25 @@ pub fn seleccion_ruleta(
     }
 }
 
+fn limpiar_ciclo(camino: &mut Camino) {
+    let mut visitados = HashMap::new();
+    let mut i = 0;
+
+    while i < camino.len() {
+        if let Some(prev_index) = visitados.insert(camino[i], i) {
+            if prev_index + 1 <= i {
+                camino.drain(prev_index + 1..=i);
+                i = prev_index + 1;
+                visitados.retain(|_, &mut v| v <= prev_index);
+            } else {
+                i += 1;
+            }
+        } else {
+            i += 1;
+        }
+    }
+}
+
 pub fn construccion_caminos(
     conjunto_aristas: &Base,
     feromonas: &Feromonas,
@@ -95,32 +114,23 @@ pub fn construccion_caminos(
 ) {
     for hormiga in hormigas.iter_mut() {
         loop {
-            let origen = hormiga.camino.last().unwrap();
+            let origen = *hormiga.camino.last().unwrap();
 
-            if *origen == destino {
+            if origen == destino {
                 break;
             }
 
-            // Evitar volver a los mismo nodos si ya fueron visitados
-            // NOTE: Esto evita que existan ciclos en el camino que forma la hormiga
-            let visitados = &hormiga.camino;
-            let vecinos: &Camino = &conjunto_aristas[*origen as usize];
-            let mut vertices_factibles: Camino = vecinos
-                .iter()
-                .copied()
-                .filter(|nodo| !visitados.contains(nodo))
-                .collect();
+            let vertices_factibles: &Camino = &conjunto_aristas[origen as usize];
 
-            // La hormiga esta atrapada en un nodo sin salidas
-            if vertices_factibles.is_empty() && hormiga.camino.len() > 1 {
-                // Retroceder antes de toparse con el camino muerto
-                let anterior = hormiga.camino[hormiga.camino.len() - 2];
-                vertices_factibles.push(anterior);
+            if let Some(siguiente) =
+                seleccion_ruleta(origen, &mut vertices_factibles.clone(), &feromonas)
+            {
+                hormiga.camino.push(siguiente);
+            } else {
+                break;
             }
-
-            let siguiente = seleccion_ruleta(*origen, vertices_factibles, &feromonas.to_vec());
-            hormiga.camino.push(siguiente.unwrap());
         }
+        limpiar_ciclo(&mut hormiga.camino);
     }
 }
 

@@ -3,64 +3,65 @@ mod sistema_hormigas;
 use crate::sistema_hormigas::*;
 use std::env;
 
-fn sistema_hormigas(n_hormigas: usize, inicio: Nodo, destino: Nodo, max_iteraciones: usize) {
-    // EJEMPLO
-    let conjunto_aristas: Vec<Vec<Nodo>> = vec![
-        vec![],
-        vec![2, 10, 5],    // 1
-        vec![1, 6, 8, 3],  // 2
-        vec![2, 7, 9, 4],  // 3
-        vec![3, 8, 10, 5], // 4
-        vec![4, 9, 6, 1],  // 5
-        vec![2, 5, 10],    // 6
-        vec![3, 8],        // 7
-        vec![2, 7, 9, 4],  // 8
-        vec![3, 8, 10, 5], // 9
-        vec![4, 9, 6, 1],  //10
-    ];
-    let p: Rho = 0.6;
+fn sistema_hormigas(
+    n_hormigas: usize,
+    _importancia_distancia: Rho,
+    _importancia_feromona: Rho,
+    max_iteraciones: usize,
+    filepath: String,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let file = leer_matriz(filepath.as_str())?;
+    let conjunto_aristas = get_conjunto_aristas_from_distancia(&file);
+    let distancias = file.matriz;
 
-    let mut i = 0;
+    let p: Rho = 0.6;
 
     let mut feromonas = algoritmo_inicializacion(&conjunto_aristas);
 
     let mut camino_minimo: Camino = Vec::new();
+    let mut mejor_costo = u32::MAX;
 
-    while i <= max_iteraciones {
-        let mut hormigas = inicializacion_hormigas(n_hormigas, inicio);
+    let ciudad_inicio = get_inicio(&file.dimension);
 
-        construccion_caminos(&conjunto_aristas, &feromonas, &mut hormigas, destino);
+    for _ in 1..=max_iteraciones {
+        let mut hormigas = inicializacion_hormigas(n_hormigas, ciudad_inicio);
 
-        let evaluacion_caminos = evaluacion_caminos(&hormigas);
+        construccion_caminos(&conjunto_aristas, &feromonas, &mut hormigas, &distancias);
+
+        let evaluacion_caminos = evaluacion_caminos(&hormigas, hormigas.len(), &distancias);
+
+        // Mostrar el camino de cada hormiga
+        for (i, hormiga) in hormigas.iter().enumerate() {
+            // println!("Hormiga {}: Camino: {:?}", i + 1, hormiga.camino);
+        }
 
         // Buscar el mejor camino de la iteracion actual
-        let (pos_mejor, valor_minimo) = evaluacion_caminos
+        let (pos_mejor, costo_actual) = evaluacion_caminos
             .iter()
             .enumerate()
             .min_by_key(|(_, &val)| val)
             .unwrap();
 
-        if camino_minimo.is_empty() || *valor_minimo < camino_minimo.len() {
+        if *costo_actual < mejor_costo {
+            mejor_costo = *costo_actual;
             camino_minimo = hormigas[pos_mejor].camino.clone();
         }
 
         evapozacion_feromona(&conjunto_aristas, &mut feromonas, p);
 
         actualizacion_feromona(&hormigas, &mut feromonas, &evaluacion_caminos);
-
-        i += 1;
     }
-    // Mostrar camino minimo
     println!("Camino minimo encontrado: {:?}", camino_minimo);
-    println!("Tamano del camino minimo: {}", camino_minimo.len());
+    println!("Costo del camino minimo: {}", mejor_costo);
+    Ok(())
 }
 
 fn main() {
     let args: Vec<String> = env::args().collect();
 
-    if args.len() < 4 {
+    if args.len() < 5 {
         eprintln!(
-            "Uso: $ ./{} <n_hormigas> <nodo_inicio> <nodo_destino> <iteraciones_maximas>",
+            "Uso: $ ./{} <n_hormigas> <nodo_inicio> <nodo_destino> <iteraciones_maximas> <filepath>",
             args[0]
         );
         return;
@@ -70,22 +71,30 @@ fn main() {
         eprintln!("El numero de hormigas debe ser al menos 1");
         return;
     }
-    let inicio: Nodo = args[2].parse().expect("Numero de nodo invalido");
-    if inicio < 1 {
+    let importancia_feromona: Rho = args[2].parse().expect("Numero de nodo invalido");
+    if importancia_feromona < 0.0 {
         eprintln!("Verificar el ejemplo y sus nodos disponibles");
         return;
     }
-    let destino: Nodo = args[3].parse().expect("Numero de nodo invalido");
-    if destino < 1 {
+    let importancia_distancia: Rho = args[3].parse().expect("Numero de nodo invalido");
+    if importancia_distancia < 0.0 {
         eprintln!("Verificar el ejemplo y sus nodos disponibles");
         return;
     }
     let iteraciones: usize = args[4].parse().expect("Numero de iteraciones invalido!");
     if iteraciones < 1 {
-        eprintln!("Verificar el ejemplu y el numero de itereaciones > 0");
+        eprintln!("Verificar el ejemplo y el numero de itereaciones > 0");
     }
+    let filepath: String = args[5].parse().expect("String invalido!");
 
     println!("Total_hormigas: {} hormigas.", n_hormigas);
+    println!("Matriz: {}", filepath);
 
-    sistema_hormigas(n_hormigas, inicio, destino, iteraciones);
+    let _ = sistema_hormigas(
+        n_hormigas,
+        importancia_distancia,
+        importancia_feromona,
+        iteraciones,
+        filepath,
+    );
 }

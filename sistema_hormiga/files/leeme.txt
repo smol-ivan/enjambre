@@ -1,0 +1,11 @@
+El formato de los archivos es el siguiente:
+
+NAME: nombre del caso
+TYPE: irrelevante
+COMMENT: irrelevante
+DIMENSION: número de ciudades
+BEST_KNOWN: mejor solución conocida
+EDGE_WEIGHT_TYPE: irrelevante
+EDGE_WEIGHT_FORMAT: irrelevante
+EDGE_WEIGHT_SECTION: matriz de costos (se tiene que leer valor por valor)
+EOF

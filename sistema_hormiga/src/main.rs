@@ -14,16 +14,18 @@ fn sistema_hormigas(
     let conjunto_aristas = get_conjunto_aristas_from_distancia(&file);
     let distancias = file.matriz;
 
-    let p: Rho = 0.6;
+    let p: Rho = 0.3;
 
     let mut feromonas = algoritmo_inicializacion(&conjunto_aristas);
 
     let mut camino_minimo: Camino = Vec::new();
     let mut mejor_costo = u32::MAX;
 
-    let ciudad_inicio = get_inicio(&file.dimension);
+    for i in 1..=max_iteraciones {
+        print!("\rProgreso: {}/{}", i, max_iteraciones);
+        std::io::Write::flush(&mut std::io::stdout()).unwrap();
 
-    for _ in 1..=max_iteraciones {
+        let ciudad_inicio = get_inicio(&file.dimension);
         let mut hormigas = inicializacion_hormigas(n_hormigas, ciudad_inicio);
 
         construccion_caminos(&conjunto_aristas, &feromonas, &mut hormigas, &distancias);
@@ -31,9 +33,9 @@ fn sistema_hormigas(
         let evaluacion_caminos = evaluacion_caminos(&hormigas, hormigas.len(), &distancias);
 
         // Mostrar el camino de cada hormiga
-        for (i, hormiga) in hormigas.iter().enumerate() {
-            // println!("Hormiga {}: Camino: {:?}", i + 1, hormiga.camino);
-        }
+        // for (i, hormiga) in hormigas.iter().enumerate() {
+        // println!("Hormiga {}: Camino: {:?}", i + 1, hormiga.camino);
+        // }
 
         // Buscar el mejor camino de la iteracion actual
         let (pos_mejor, costo_actual) = evaluacion_caminos
@@ -51,6 +53,7 @@ fn sistema_hormigas(
 
         actualizacion_feromona(&hormigas, &mut feromonas, &evaluacion_caminos);
     }
+    println!();
     println!("Camino minimo encontrado: {:?}", camino_minimo);
     println!("Costo del camino minimo: {}", mejor_costo);
     Ok(())

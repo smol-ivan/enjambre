@@ -107,8 +107,19 @@ pub fn seleccion_ruleta(
         // Remover j de las posibles selecciones
         let j: Nodo = vertices_factibles.remove(indice_nodo);
 
-        proporcion += feromonas[origen as usize].get(&j).copied().unwrap()
-            / (distancias[origen as usize][j as usize] as Peso * total);
+        let feromona_ij = feromonas[origen as usize].get(&j).copied().unwrap();
+
+        let distancia_ij = distancias[origen as usize][j as usize] as Peso;
+
+        if distancia_ij == 0.0 {
+            return Some(j);
+        }
+
+        proporcion += feromona_ij / (distancia_ij * total);
+        // println!(
+        //     "Proporcion: {}, Distancia: {}, Feromona: {}",
+        //     &proporcion, distancia_ij, feromona_ij
+        // );
 
         if proporcion >= umbral {
             return Some(j);

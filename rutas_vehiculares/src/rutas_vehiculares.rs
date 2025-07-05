@@ -1,11 +1,13 @@
+use rand::prelude::*;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 
 pub type NodoId = u32;
 pub type Feromona = f64;
+pub type Distancia = f32;
 pub type ConjuntoAristas = Vec<Vec<NodoId>>;
 pub type ConjuntoFeromonas = Vec<Vec<Feromona>>;
-pub type ConjuntoDistancias = Vec<Vec<u32>>;
+pub type ConjuntoDistancias = Vec<Vec<Distancia>>;
 pub type Camino = Vec<NodoId>;
 pub type Hormigas = Vec<Hormiga>;
 pub type Rho = f64;
@@ -49,12 +51,42 @@ pub struct Hormiga {
     pub rutas: Vec<Camino>,
 }
 
-pub fn algoritmo_inicializacion(ca: &ConjuntoAristas) -> ConjuntoFeromonas {
-    todo!("Implementar algoritmo de inicialización de feromonas");
+impl Hormiga {
+    fn new(deposito: NodoId, n_vehiculos: u32) -> Hormiga {
+        let mut rutas = Vec::with_capacity(n_vehiculos);
+        for _ in 0..n_vehiculos {
+            rutas.push(vec![deposito]);
+        }
+        Hormiga { rutas: rutas }
+    }
 }
 
-pub fn inicializacion_hormigas(n_hormigas: usize, deposito: NodoId) -> Hormigas {
-    todo!("Implementar inicialización de hormigas");
+pub fn algoritmo_inicializacion(ca: &ConjuntoAristas) -> ConjuntoFeromonas {
+    let mut rng = rand::rng();
+
+    // Agregar valores aleatorias de feromonas en las aristas
+    let mut cf: ConjuntoFeromonas = vec![vec![]];
+    for i in 0..ca.len() {
+        for j in 0..ca.len() {
+            if i != j && ca[i][j] == 1 {
+                let mut feromona: Feromona = rng.random_range(0.01..=0.1);
+                feromona = (feromona * 1_000.0).round() / 1_000.0;
+
+                // Asignacion de feromona a arista
+                cf[i][j] = feromona;
+                cf[j][i] = feromona;
+            }
+        }
+    }
+    cf
+}
+
+pub fn inicializacion_hormigas(n_hormigas: usize, deposito: NodoId, n_vehiculos: u32) -> Hormigas {
+    let mut h: Hormigas = Vec::with_capacity(n_hormigas);
+    for i in 0..cantidad_hormigas {
+        hormigas.push(Hormiga::new(deposito, n_vehiculos));
+    }
+    hormigas
 }
 
 pub fn construccion_rutas(
@@ -69,6 +101,9 @@ pub fn construccion_rutas(
     demandas: &Vec<Demanda>,
     n_vehiculos: u32,
 ) {
+    let total_nodos = ca.len;
+    for hormiga in h.iter_mut() {}
+
     todo!("Implementar construcción de rutas");
 }
 
@@ -80,9 +115,56 @@ fn seleccion_ruleta(
     i_d: ImportanciaDistancia,
     i_f: ImportanciaFeromona,
     capacidad_restante: u32,
-    demandas: &Vec<Demanda>,
+    demanda_cliente: &Vec<Demanda>,
 ) -> Option<NodoId> {
-    todo!("Implementar selección por ruleta");
+    if vertices_factibles.is_empty() {
+        return None;
+    }
+    let mut rng = rand::rng();
+
+    let umbral: f64 = rng.random_range(0.0..=1.0);
+    let mut proporcion = 0.0;
+    let total_feromonas: f64 = vertices_factibles
+        .iter()
+        .map(|destino| cf[origen][destino])
+        .sum();
+
+    let total_distancias: i32 = vertices_factibles
+        .iter()
+        .map(|destino| cd[origen][destino])
+        .sum();
+
+    let total = total_feromonas / total_distancias as f64;
+
+    loop {
+        if vertices_factibles.len() == 1 {
+            return vertices_factibles.last().copied();
+        }
+
+        // Elejir vertice aleatoriamente
+        let indice_nodo = rng.random_range(0..vertices_factibles.len());
+
+        // Remover j de las posibles selecciones
+        let j: NodoId = vertices_factibles.remove(indice_nodo);
+
+        let feromona_ij = cf[origen][j];
+        let distancia_ij = cd[origen][j];
+
+        if distancia_ij = 0.0 {
+            return Some(j);
+        }
+
+        // Acatar la capacidad restante
+        if distancia_ij > capacidad_restante {
+            continue;
+        }
+
+        proporcion += feromona_ij / (distancia_ij * total);
+
+        if proporcion >= umbral {
+            return Some(j);
+        }
+    }
 }
 
 pub fn evapozacion_feromona(ca: &ConjuntoAristas, cf: &mut ConjuntoFeromonas, p: Rho) {

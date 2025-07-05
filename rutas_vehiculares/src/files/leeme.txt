@@ -1,0 +1,31 @@
+El formato de los archivos es el siguiente:
+
+*** Archivos .vrp
+Datos de entrada del caso
+
+NAME : nombre del caso de prueba
+COMMENT : Número de veículos y costo óptimo (No of trucks, Optimal value)
+TYPE : irrelevante
+DIMENSION : número de vértices (el depósito es uno y los demás son clientes)
+EDGE_WEIGHT_TYPE : irrelevante 
+CAPACITY : capacidad de los vehiculos
+NODE_COORD_SECTION : coordenadas de los vértices
+Id x y
+
+DEMAND_SECTION : demanda de los clientes
+Id demanda
+
+DEPOT_SECTION : Id del depósito
+Id
+
+ -1
+EOF
+
+
+
+*** Archivos .sol
+Solución óptima del caso
+
+Route # : rutas diseñadas
+
+Cost : costo de la solución

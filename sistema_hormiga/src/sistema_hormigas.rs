@@ -242,7 +242,7 @@ pub fn leer_matriz(path: &str) -> Result<MatrizFromFile, Box<dyn Error>> {
             let numeros: Distancia = linea
                 .split_whitespace()
                 .map(|s| s.parse::<u32>())
-                .collect::<Result<_, _>>()?;
+                .collect::<Result<_, _>>().expect("");
 
             valores.extend(numeros);
         }

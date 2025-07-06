@@ -22,9 +22,9 @@ pub struct EvaluacionSolucion {
 }
 
 pub struct Nodo {
-    id: u32,
-    x: u32,
-    y: u32,
+    pub id: u32,
+    pub x: u32,
+    pub y: u32,
 }
 
 impl Nodo {
@@ -33,17 +33,17 @@ impl Nodo {
     }
 }
 
-pub struct Demanda {
-    id_cliente: u32,
-    demanda: u32,
+pub struct Cliente {
+    pub id: u32,
+    pub demanda: u32,
 }
 
 pub struct DatosVRP {
-    pub clientes: Vec<Nodo>,
+    pub nodos: Vec<Nodo>,
     pub dimension: u32,
     pub capacidad: u32,
     pub deposito_id: u32,
-    pub demanda: Vec<Demanda>,
+    pub clientes: Vec<Cliente>,
     pub n_vehiculos: u32,
 }
 
@@ -52,12 +52,8 @@ pub struct Hormiga {
 }
 
 impl Hormiga {
-    fn new(deposito: NodoId, n_vehiculos: u32) -> Hormiga {
-        let mut rutas = Vec::with_capacity(n_vehiculos);
-        for _ in 0..n_vehiculos {
-            rutas.push(vec![deposito]);
-        }
-        Hormiga { rutas: rutas }
+    fn new(deposito: NodoId) -> Hormiga {
+        Hormiga { rutas: Vec::new() }
     }
 }
 
@@ -81,16 +77,16 @@ pub fn algoritmo_inicializacion(ca: &ConjuntoAristas) -> ConjuntoFeromonas {
     cf
 }
 
-pub fn inicializacion_hormigas(n_hormigas: usize, deposito: NodoId, n_vehiculos: u32) -> Hormigas {
+pub fn inicializacion_hormigas(n_hormigas: usize, deposito: NodoId) -> Hormigas {
     let mut h: Hormigas = Vec::with_capacity(n_hormigas);
-    for i in 0..cantidad_hormigas {
-        hormigas.push(Hormiga::new(deposito, n_vehiculos));
+    for _ in 0..n_hormigas {
+        h.push(Hormiga::new(deposito));
     }
-    hormigas
+    h
 }
 
 pub fn construccion_rutas(
-    ca: &ConjuntoAristas,
+    _ca: &ConjuntoAristas,
     cf: &ConjuntoFeromonas,
     cd: &ConjuntoDistancias,
     h: &mut Hormigas,
@@ -98,73 +94,152 @@ pub fn construccion_rutas(
     i_f: ImportanciaFeromona,
     i_d: ImportanciaDistancia,
     deposito: NodoId,
-    demandas: &Vec<Demanda>,
-    n_vehiculos: u32,
+    clientes: &Vec<Cliente>,
 ) {
-    let total_nodos = ca.len;
-    for hormiga in h.iter_mut() {}
+    // Para cada hormiga
+    for hormiga in h.iter_mut() {
+        // Limpiar rutas previas
+        hormiga.rutas.clear();
 
-    todo!("Implementar construcción de rutas");
+        // Crear conjunto de clientes sin visitar (excluir depósito)
+        let mut clientes_sin_visitar: Vec<NodoId> = clientes
+            .iter()
+            .filter(|d| d.id != deposito)
+            .map(|d| d.id)
+            .collect();
+
+        // Construir rutas hasta visitar todos los clientes
+        while !clientes_sin_visitar.is_empty() {
+            // Crear nueva ruta empezando desde el depósito
+            let mut ruta_actual = vec![deposito];
+            let mut capacidad_restante = capacidad_maxima;
+            let mut nodo_actual = deposito;
+
+            // Construir ruta para el vehículo actual
+            loop {
+                // Filtrar vértices factibles por capacidad
+                let vertices_factibles: Vec<NodoId> = clientes_sin_visitar
+                    .iter()
+                    .filter(|&&cliente| {
+                        // Encontrar la demanda del cliente
+                        let demanda = clientes
+                            .iter()
+                            .find(|d| d.id == cliente)
+                            .map(|d| d.demanda)
+                            .unwrap_or(0);
+
+                        // Verificar que la demanda no exceda la capacidad restante
+                        demanda <= capacidad_restante
+                    })
+                    .copied()
+                    .collect();
+
+                // Si no hay vértices factibles, terminar la ruta del vehículo actual
+                if vertices_factibles.is_empty() {
+                    break;
+                }
+
+                // Seleccionar siguiente nodo usando ruleta
+                if let Some(siguiente_nodo) =
+                    seleccion_ruleta(nodo_actual, &vertices_factibles, cf, cd, i_d, i_f)
+                {
+                    // Agregar el nodo a la ruta
+                    ruta_actual.push(siguiente_nodo);
+
+                    // Actualizar capacidad restante
+                    let demanda_cliente = clientes
+                        .iter()
+                        .find(|d| d.id == siguiente_nodo)
+                        .map(|d| d.demanda)
+                        .unwrap_or(0);
+
+                    capacidad_restante = capacidad_restante.saturating_sub(demanda_cliente);
+
+                    // Remover cliente de la lista de sin visitar
+                    clientes_sin_visitar.retain(|&x| x != siguiente_nodo);
+
+                    // Actualizar nodo actual
+                    nodo_actual = siguiente_nodo;
+                } else {
+                    // Si no se puede seleccionar ningún nodo, terminar la ruta
+                    break;
+                }
+            }
+
+            // Regresar al depósito
+            ruta_actual.push(deposito);
+
+            // Agregar la ruta completada a la hormiga
+            hormiga.rutas.push(ruta_actual);
+        }
+
+        // Nota: La hormiga ahora tiene una solución completa (visita todos los clientes)
+        // pero puede usar más o menos vehículos que n_vehiculos.
+        // La factibilidad se evaluará en la función de evaluación.
+    }
 }
 
 fn seleccion_ruleta(
     origen: NodoId,
-    vertices_factibles: &mut Camino,
+    vertices_factibles: &[NodoId],
     cf: &ConjuntoFeromonas,
     cd: &ConjuntoDistancias,
     i_d: ImportanciaDistancia,
     i_f: ImportanciaFeromona,
-    capacidad_restante: u32,
-    demanda_cliente: &Vec<Demanda>,
 ) -> Option<NodoId> {
     if vertices_factibles.is_empty() {
         return None;
     }
+
+    if vertices_factibles.len() == 1 {
+        return vertices_factibles.first().copied();
+    }
+
+    // Calcular probabilidades usando la fórmula del ACO
+    // p_ij = (τ_ij^α * η_ij^β) / Σ(τ_ik^α * η_ik^β)
+    // donde τ_ij es la feromona, η_ij es la heurística (1/distancia)
+
+    let mut probabilidades: Vec<f64> = Vec::new();
+    let mut suma_total = 0.0;
+
+    for &destino in vertices_factibles {
+        let feromona_ij = cf[origen as usize][destino as usize];
+        let distancia_ij = cd[origen as usize][destino as usize];
+
+        if distancia_ij <= 0.0 {
+            // Si la distancia es 0, este nodo tiene probabilidad máxima
+            return Some(destino);
+        }
+
+        // Heurística = 1/distancia (mayor preferencia a distancias cortas)
+        let heuristica_ij = 1.0 / distancia_ij as f64;
+
+        // Aplicar las importancias (exponentes)
+        let valor = feromona_ij.powf(i_f) * heuristica_ij.powf(i_d);
+
+        probabilidades.push(valor);
+        suma_total += valor;
+    }
+
+    // Normalizar probabilidades
+    for prob in &mut probabilidades {
+        *prob /= suma_total;
+    }
+
+    // Selección por ruleta
     let mut rng = rand::rng();
-
     let umbral: f64 = rng.random_range(0.0..=1.0);
-    let mut proporcion = 0.0;
-    let total_feromonas: f64 = vertices_factibles
-        .iter()
-        .map(|destino| cf[origen][destino])
-        .sum();
+    let mut acumulado = 0.0;
 
-    let total_distancias: i32 = vertices_factibles
-        .iter()
-        .map(|destino| cd[origen][destino])
-        .sum();
-
-    let total = total_feromonas / total_distancias as f64;
-
-    loop {
-        if vertices_factibles.len() == 1 {
-            return vertices_factibles.last().copied();
-        }
-
-        // Elejir vertice aleatoriamente
-        let indice_nodo = rng.random_range(0..vertices_factibles.len());
-
-        // Remover j de las posibles selecciones
-        let j: NodoId = vertices_factibles.remove(indice_nodo);
-
-        let feromona_ij = cf[origen][j];
-        let distancia_ij = cd[origen][j];
-
-        if distancia_ij = 0.0 {
-            return Some(j);
-        }
-
-        // Acatar la capacidad restante
-        if distancia_ij > capacidad_restante {
-            continue;
-        }
-
-        proporcion += feromona_ij / (distancia_ij * total);
-
-        if proporcion >= umbral {
-            return Some(j);
+    for (i, &prob) in probabilidades.iter().enumerate() {
+        acumulado += prob;
+        if acumulado >= umbral {
+            return Some(vertices_factibles[i]);
         }
     }
+
+    // En caso de error de redondeo, devolver el último elemento
+    vertices_factibles.last().copied()
 }
 
 pub fn evapozacion_feromona(ca: &ConjuntoAristas, cf: &mut ConjuntoFeromonas, p: Rho) {
@@ -185,11 +260,33 @@ pub fn evaluacion_soluciones(
 }
 
 pub fn calcular_matriz_distancias(datos: &DatosVRP) -> ConjuntoDistancias {
-    // Calcular la distancia eucladiana entre cada par de nodos
-    todo!("Implementar cálculo de matriz de distancias");
+    // Calcular la distancia euclidiana entre cada par de nodos
+    let n = datos.dimension as usize;
+    let mut matriz_distancias = vec![vec![0.0; n]; n];
+
+    for i in 0..n {
+        for j in 0..n {
+            if i == j {
+                matriz_distancias[i][j] = 0.0;
+            } else {
+                // Obtener coordenadas de los nodos
+                let nodo_i = &datos.nodos[i];
+                let nodo_j = &datos.nodos[j];
+
+                // Calcular distancia euclidiana: sqrt((x2-x1)² + (y2-y1)²)
+                let dx = (nodo_j.x as f64 - nodo_i.x as f64).powi(2);
+                let dy = (nodo_j.y as f64 - nodo_i.y as f64).powi(2);
+                let distancia = (dx + dy).sqrt();
+
+                matriz_distancias[i][j] = distancia as f32;
+            }
+        }
+    }
+
+    matriz_distancias
 }
 
-pub fn create_conjunto_aristas(dimension: usize) -> ConjuntoAristas {
+pub fn create_conjunto_aristas(dimension: usize, nodos: &Vec<Nodo>) -> ConjuntoAristas {
     // Crear la matriz de adyacencia para las aristas
     todo!("Implementar obtención de conjunto de aristas");
 }
@@ -202,8 +299,8 @@ pub fn leer_matriz(path: String) -> DatosVRP {
 
     let mut dimension = 0u32;
     let mut capacidad = 0u32;
-    let mut clientes: Vec<Nodo> = Vec::new();
-    let mut demandas: Vec<Demanda> = Vec::new();
+    let mut nodos: Vec<Nodo> = Vec::new();
+    let mut clientes_con_demanda: Vec<Cliente> = Vec::new();
     let mut deposito_id: u32 = 0;
     let mut n_vehiculos: u32 = 0;
 
@@ -264,7 +361,7 @@ pub fn leer_matriz(path: String) -> DatosVRP {
                     .collect();
                 if fila.len() == 3 {
                     let nodo = Nodo::new(fila[0], fila[1], fila[2]);
-                    clientes.push(nodo);
+                    nodos.push(nodo);
                 }
             }
             "DEMAND_SECTION" => {
@@ -274,11 +371,11 @@ pub fn leer_matriz(path: String) -> DatosVRP {
                     .map(|c| c.parse::<u32>().expect("Error parseando demanda"))
                     .collect();
                 if fila.len() == 2 {
-                    let demanda = Demanda {
-                        id_cliente: fila[0],
+                    let cliente = Cliente {
+                        id: fila[0],
                         demanda: fila[1],
                     };
-                    demandas.push(demanda);
+                    clientes_con_demanda.push(cliente);
                 }
             }
             "DEPOT_SECTION" => {
@@ -290,11 +387,11 @@ pub fn leer_matriz(path: String) -> DatosVRP {
     }
 
     DatosVRP {
-        clientes,
+        nodos,
         dimension,
         capacidad,
         deposito_id,
-        demanda: demandas,
+        clientes: clientes_con_demanda,
         n_vehiculos,
     }
 }

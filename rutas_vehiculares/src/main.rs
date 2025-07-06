@@ -14,7 +14,7 @@ fn rutas_vehiculares(
     let datos = leer_matriz(filepath);
 
     // Inicializacion de conjunto de aristas, feromonas y distancias
-    let ca = create_conjunto_aristas(datos.dimension as usize);
+    let ca = create_conjunto_aristas(datos.dimension as usize, &datos.nodos);
     let mut cf = algoritmo_inicializacion(&ca);
     let cd = calcular_matriz_distancias(&datos);
 
@@ -30,8 +30,7 @@ fn rutas_vehiculares(
             importancia_feromona,
             importancia_distancia,
             datos.deposito_id,
-            &datos.demanda,
-            datos.n_vehiculos,
+            &datos.clientes,
         );
 
         let evaluacion_rutas =

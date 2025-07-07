@@ -1,10 +1,8 @@
 use rand::prelude::*;
-use std::fs::File;
-use std::io::{BufRead, BufReader};
 
 pub type NodoId = u32;
 pub type Feromona = f64;
-pub type Distancia = f32;
+pub type Distancia = f64;
 pub type ConjuntoAristas = Vec<Vec<NodoId>>;
 pub type ConjuntoFeromonas = Vec<Vec<Feromona>>;
 pub type ConjuntoDistancias = Vec<Vec<Distancia>>;
@@ -21,6 +19,7 @@ pub struct EvaluacionSolucion {
     pub es_factible: bool,
 }
 
+#[derive(Debug)]
 pub struct Nodo {
     pub id: u32,
     pub x: u32,
@@ -33,11 +32,13 @@ impl Nodo {
     }
 }
 
+#[derive(Debug)]
 pub struct Cliente {
     pub id: u32,
     pub demanda: u32,
 }
 
+#[derive(Debug)]
 pub struct DatosVRP {
     pub nodos: Vec<Nodo>,
     pub dimension: u32,
@@ -47,28 +48,38 @@ pub struct DatosVRP {
     pub n_vehiculos: u32,
 }
 
+#[derive(Debug, Clone)]
 pub struct Hormiga {
     pub rutas: Vec<Camino>,
 }
 
 impl Hormiga {
-    fn new(deposito: NodoId) -> Hormiga {
+    fn new() -> Hormiga {
         Hormiga { rutas: Vec::new() }
     }
 }
 
+pub struct Solucion {
+    pub rutas: Vec<Camino>,
+    pub costo_total: u32,
+    pub vehiculos_usados: u32,
+}
+
 pub fn algoritmo_inicializacion(ca: &ConjuntoAristas) -> ConjuntoFeromonas {
     let mut rng = rand::rng();
+    let dimension = ca.len();
 
-    // Agregar valores aleatorias de feromonas en las aristas
-    let mut cf: ConjuntoFeromonas = vec![vec![]];
-    for i in 0..ca.len() {
-        for j in 0..ca.len() {
-            if i != j && ca[i][j] == 1 {
+    // Inicializar matriz de feromonas con el tamaño correcto
+    let mut cf: ConjuntoFeromonas = vec![vec![0.0; dimension]; dimension];
+
+    for i in 0..dimension {
+        for j in 0..dimension {
+            if i != j && ca[i][j] != 0 {
+                // Solo inicializar feromona donde hay arista válida
                 let mut feromona: Feromona = rng.random_range(0.01..=0.1);
                 feromona = (feromona * 1_000.0).round() / 1_000.0;
 
-                // Asignacion de feromona a arista
+                // Asignacion de feromona a arista (bidireccional)
                 cf[i][j] = feromona;
                 cf[j][i] = feromona;
             }
@@ -77,10 +88,10 @@ pub fn algoritmo_inicializacion(ca: &ConjuntoAristas) -> ConjuntoFeromonas {
     cf
 }
 
-pub fn inicializacion_hormigas(n_hormigas: usize, deposito: NodoId) -> Hormigas {
+pub fn inicializacion_hormigas(n_hormigas: usize) -> Hormigas {
     let mut h: Hormigas = Vec::with_capacity(n_hormigas);
     for _ in 0..n_hormigas {
-        h.push(Hormiga::new(deposito));
+        h.push(Hormiga::new());
     }
     h
 }
@@ -203,8 +214,11 @@ fn seleccion_ruleta(
     let mut suma_total = 0.0;
 
     for &destino in vertices_factibles {
-        let feromona_ij = cf[origen as usize][destino as usize];
-        let distancia_ij = cd[origen as usize][destino as usize];
+        let origen_indice = (origen - 1) as usize;
+        let destino_indice = (destino - 1) as usize;
+
+        let feromona_ij = cf[origen_indice][destino_indice];
+        let distancia_ij = cd[origen_indice][destino_indice];
 
         if distancia_ij <= 0.0 {
             // Si la distancia es 0, este nodo tiene probabilidad máxima
@@ -242,12 +256,67 @@ fn seleccion_ruleta(
     vertices_factibles.last().copied()
 }
 
-pub fn evapozacion_feromona(ca: &ConjuntoAristas, cf: &mut ConjuntoFeromonas, p: Rho) {
-    todo!("Implementar evaporación de feromona");
+pub fn evapozacion_feromona(_ca: &ConjuntoAristas, cf: &mut ConjuntoFeromonas, p: Rho) {
+    // Evaporación de feromona en todas las aristas
+    // Fórmula: τ_ij = (1 - ρ) * τ_ij
+    // donde ρ (rho) es la tasa de evaporación
+
+    for i in 0..cf.len() {
+        for j in 0..cf[i].len() {
+            if i != j {
+                // Aplicar evaporación
+                cf[i][j] *= 1.0 - p;
+
+                // Mantener un valor mínimo de feromona para evitar que se haga 0
+                let feromona_minima = 0.001;
+                if cf[i][j] < feromona_minima {
+                    cf[i][j] = feromona_minima;
+                }
+            }
+        }
+    }
 }
 
-pub fn actualizacion_feromona(h: &Hormigas, cf: &mut ConjuntoFeromonas, ed: &ConjuntoDistancias) {
-    todo!("Implementar actualización de feromona");
+pub fn actualizacion_feromona(
+    h: &Hormigas,
+    cf: &mut ConjuntoFeromonas,
+    evaluaciones: &Evaluaciones,
+) {
+    for (index, hormiga) in h.iter().enumerate() {
+        let evaluacion = &evaluaciones[index];
+
+        // Solo actualizar feromonas si la solución es factible
+        if evaluacion.es_factible {
+            // Aportación basada en la calidad de la solución
+            // Mejor solución (menor costo) → mayor aportación
+            let aportacion: f64 = 1.0 / evaluacion.costo_total as f64;
+
+            // Para cada ruta de la hormiga
+            for ruta in &hormiga.rutas {
+                // Verificar que la ruta tenga al menos 2 nodos
+                if ruta.len() < 2 {
+                    continue;
+                }
+
+                // Para cada arista de la ruta (nodo_i -> nodo_j)
+                for ventana in ruta.windows(2) {
+                    let origen_id = ventana[0];
+                    let destino_id = ventana[1];
+
+                    let origen_indice = (origen_id - 1) as usize;
+                    let destino_indice = (destino_id - 1) as usize;
+
+                    // Verificar que los índices estén dentro de los límites
+                    if origen_indice < cf.len() && destino_indice < cf[origen_indice].len() {
+                        // Actualizar feromona
+                        cf[origen_indice][destino_indice] += aportacion;
+                        cf[destino_indice][origen_indice] += aportacion;
+                    }
+                }
+            }
+        }
+        // Nota: Las soluciones no factibles no aportan feromona
+    }
 }
 
 pub fn evaluacion_soluciones(
@@ -255,21 +324,112 @@ pub fn evaluacion_soluciones(
     cd: &ConjuntoDistancias,
     capacidad_maxima: u32,
     n_vehiculos: u32,
+    clientes: &Vec<Cliente>,
 ) -> Evaluaciones {
-    todo!("Implementar evaluación de soluciones");
+    let mut evaluaciones: Evaluaciones = Vec::with_capacity(h.len());
+
+    for hormiga in h.iter() {
+        let mut costo_total = 0u32;
+        let vehiculos_usados = hormiga.rutas.len() as u32;
+
+        // Verificar si usa más vehículos de los permitidos
+        if vehiculos_usados > n_vehiculos {
+            evaluaciones.push(EvaluacionSolucion {
+                costo_total: u32::MAX, // Penalización por usar demasiados vehículos
+                vehiculos_usados,
+                es_factible: false,
+            });
+            continue;
+        }
+
+        let mut es_factible = true;
+
+        // Evaluar cada ruta de la hormiga
+        for ruta in &hormiga.rutas {
+            if ruta.len() < 2 {
+                continue; // Ruta vacía o con solo el depósito, saltar
+            }
+
+            let mut distancia_ruta = 0u32;
+            let mut demanda_ruta = 0u32;
+
+            // Calcular distancia y demanda total de la ruta
+            for ventana in ruta.windows(2) {
+                let nodo_actual_id = ventana[0];
+                let nodo_siguiente_id = ventana[1];
+
+                let nodo_actual_indice = (nodo_actual_id - 1) as usize;
+                let nodo_siguiente_indice = (nodo_siguiente_id - 1) as usize;
+
+                // Verificar que los índices estén dentro de los límites
+                if nodo_actual_indice < cd.len()
+                    && nodo_siguiente_indice < cd[nodo_actual_indice].len()
+                {
+                    distancia_ruta += cd[nodo_actual_indice][nodo_siguiente_indice] as u32;
+                } else {
+                    es_factible = false;
+                    break;
+                }
+            }
+
+            // Calcular demanda total de la ruta (excluyendo depósito)
+            for &nodo_id in ruta.iter() {
+                if let Some(cliente) = clientes.iter().find(|c| c.id == nodo_id) {
+                    demanda_ruta += cliente.demanda;
+                }
+            }
+
+            // Verificar restricción de capacidad
+            if demanda_ruta > capacidad_maxima {
+                es_factible = false;
+            }
+
+            costo_total += distancia_ruta;
+        }
+
+        // Verificar que todos los clientes fueron visitados
+        let mut clientes_visitados: Vec<NodoId> = Vec::new();
+        for ruta in &hormiga.rutas {
+            for &nodo_id in ruta.iter() {
+                if clientes.iter().any(|c| c.id == nodo_id) {
+                    clientes_visitados.push(nodo_id);
+                }
+            }
+        }
+
+        // Remover duplicados y verificar que se visitaron todos los clientes
+        clientes_visitados.sort();
+        clientes_visitados.dedup();
+
+        let mut clientes_esperados: Vec<NodoId> = clientes.iter().map(|c| c.id).collect();
+        clientes_esperados.sort();
+
+        if clientes_visitados != clientes_esperados {
+            es_factible = false;
+        }
+
+        let evaluacion = EvaluacionSolucion {
+            costo_total,
+            vehiculos_usados,
+            es_factible,
+        };
+
+        evaluaciones.push(evaluacion);
+    }
+
+    evaluaciones
 }
 
-pub fn calcular_matriz_distancias(datos: &DatosVRP) -> ConjuntoDistancias {
-    // Calcular la distancia euclidiana entre cada par de nodos
+pub fn calcular_conjunto_distancias(datos: &DatosVRP) -> ConjuntoDistancias {
     let n = datos.dimension as usize;
-    let mut matriz_distancias = vec![vec![0.0; n]; n];
+    let mut conjunto_distancias = vec![vec![0.0; n]; n];
 
     for i in 0..n {
         for j in 0..n {
             if i == j {
-                matriz_distancias[i][j] = 0.0;
+                conjunto_distancias[i][j] = 0.0;
             } else {
-                // Obtener coordenadas de los nodos
+                // Obtener coordenadas de los nodos usando índices
                 let nodo_i = &datos.nodos[i];
                 let nodo_j = &datos.nodos[j];
 
@@ -278,17 +438,28 @@ pub fn calcular_matriz_distancias(datos: &DatosVRP) -> ConjuntoDistancias {
                 let dy = (nodo_j.y as f64 - nodo_i.y as f64).powi(2);
                 let distancia = (dx + dy).sqrt();
 
-                matriz_distancias[i][j] = distancia as f32;
+                // Asignar distancia al conjunto
+                conjunto_distancias[i][j] = distancia;
+                conjunto_distancias[j][i] = distancia;
             }
         }
     }
 
-    matriz_distancias
+    conjunto_distancias
 }
 
-pub fn create_conjunto_aristas(dimension: usize, nodos: &Vec<Nodo>) -> ConjuntoAristas {
-    // Crear la matriz de adyacencia para las aristas
-    todo!("Implementar obtención de conjunto de aristas");
+pub fn create_conjunto_aristas(dimension: usize) -> ConjuntoAristas {
+    let mut ca: ConjuntoAristas = vec![vec![0; dimension]; dimension];
+
+    for i in 0..dimension {
+        for j in 0..dimension {
+            if i != j {
+                ca[i][j] = 1;
+                ca[j][i] = 1;
+            }
+        }
+    }
+    ca
 }
 
 pub fn leer_matriz(path: String) -> DatosVRP {
@@ -313,8 +484,8 @@ pub fn leer_matriz(path: String) -> DatosVRP {
         if ltrim.starts_with("COMMENT :") {
             // Ejemplo: COMMENT : (Augerat et al, No of trucks: 5, Optimal value: 784)
             let comment = ltrim["COMMENT :".len()..].trim();
-            if let Some(idx) = comment.find("No of trucks:") {
-                let after = &comment[idx + "No of trucks:".len()..];
+            if let Some(indice) = comment.find("No of trucks:") {
+                let after = &comment[indice + "No of trucks:".len()..];
                 if let Some(end) = after.find(',') {
                     let trucks_str = after[..end].trim();
                     if let Ok(val) = trucks_str.parse::<u32>() {

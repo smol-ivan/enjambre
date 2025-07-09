@@ -177,16 +177,12 @@ pub fn construccion_rutas(
                 }
             }
 
-            // Regresar al depósito
+            // Siempre regresar al deposito al finalizar la ruta
             ruta_actual.push(deposito);
 
             // Agregar la ruta completada a la hormiga
             hormiga.rutas.push(ruta_actual);
         }
-
-        // Nota: La hormiga ahora tiene una solución completa (visita todos los clientes)
-        // pero puede usar más o menos vehículos que n_vehiculos.
-        // La factibilidad se evaluará en la función de evaluación.
     }
 }
 
@@ -206,9 +202,9 @@ fn seleccion_ruleta(
         return vertices_factibles.first().copied();
     }
 
-    // Calcular probabilidades usando la fórmula del ACO
+    // Probabilidad de transición entre nodos
     // p_ij = (τ_ij^α * η_ij^β) / Σ(τ_ik^α * η_ik^β)
-    // donde τ_ij es la feromona, η_ij es la heurística (1/distancia)
+    // donde τ_ij es la feromona, η_ij es (1/distancia)
 
     let mut probabilidades: Vec<f64> = Vec::new();
     let mut suma_total = 0.0;
@@ -225,7 +221,7 @@ fn seleccion_ruleta(
             return Some(destino);
         }
 
-        // Heurística = 1/distancia (mayor preferencia a distancias cortas)
+        // mayor preferencia a distancias cortas
         let heuristica_ij = 1.0 / distancia_ij as f64;
 
         // Aplicar las importancias (exponentes)
@@ -259,7 +255,6 @@ fn seleccion_ruleta(
 pub fn evapozacion_feromona(_ca: &ConjuntoAristas, cf: &mut ConjuntoFeromonas, p: Rho) {
     // Evaporación de feromona en todas las aristas
     // Fórmula: τ_ij = (1 - ρ) * τ_ij
-    // donde ρ (rho) es la tasa de evaporación
 
     for i in 0..cf.len() {
         for j in 0..cf[i].len() {
@@ -267,10 +262,10 @@ pub fn evapozacion_feromona(_ca: &ConjuntoAristas, cf: &mut ConjuntoFeromonas, p
                 // Aplicar evaporación
                 cf[i][j] *= 1.0 - p;
 
-                // Mantener un valor mínimo de feromona para evitar que se haga 0
-                let feromona_minima = 0.001;
-                if cf[i][j] < feromona_minima {
-                    cf[i][j] = feromona_minima;
+                // Mantener un valor mínimo de feromona
+
+                if cf[i][j] < 0.001 {
+                    cf[i][j] = 0.001;
                 }
             }
         }
@@ -285,37 +280,27 @@ pub fn actualizacion_feromona(
     for (index, hormiga) in h.iter().enumerate() {
         let evaluacion = &evaluaciones[index];
 
-        // Solo actualizar feromonas si la solución es factible
-        if evaluacion.es_factible {
-            // Aportación basada en la calidad de la solución
-            // Mejor solución (menor costo) → mayor aportación
-            let aportacion: f64 = 1.0 / evaluacion.costo_total as f64;
+        // Solo actualizar por completo lasferomonas si la solución es factible
+        let aportacion: Feromona = if evaluacion.es_factible {
+            1.0 / evaluacion.costo_total as Feromona
+        } else {
+            0.01
+        };
 
-            // Para cada ruta de la hormiga
-            for ruta in &hormiga.rutas {
-                // Verificar que la ruta tenga al menos 2 nodos
-                if ruta.len() < 2 {
-                    continue;
-                }
+        for ruta in &hormiga.rutas {
+            // Para cada arista de la ruta (nodo_i -> nodo_j)
+            for ventana in ruta.windows(2) {
+                let origen_id = ventana[0];
+                let destino_id = ventana[1];
 
-                // Para cada arista de la ruta (nodo_i -> nodo_j)
-                for ventana in ruta.windows(2) {
-                    let origen_id = ventana[0];
-                    let destino_id = ventana[1];
+                let origen_indice = (origen_id - 1) as usize;
+                let destino_indice = (destino_id - 1) as usize;
 
-                    let origen_indice = (origen_id - 1) as usize;
-                    let destino_indice = (destino_id - 1) as usize;
-
-                    // Verificar que los índices estén dentro de los límites
-                    if origen_indice < cf.len() && destino_indice < cf[origen_indice].len() {
-                        // Actualizar feromona
-                        cf[origen_indice][destino_indice] += aportacion;
-                        cf[destino_indice][origen_indice] += aportacion;
-                    }
-                }
+                // Actualizar feromona
+                cf[origen_indice][destino_indice] += aportacion;
+                cf[destino_indice][origen_indice] += aportacion;
             }
         }
-        // Nota: Las soluciones no factibles no aportan feromona
     }
 }
 
@@ -361,15 +346,7 @@ pub fn evaluacion_soluciones(
                 let nodo_actual_indice = (nodo_actual_id - 1) as usize;
                 let nodo_siguiente_indice = (nodo_siguiente_id - 1) as usize;
 
-                // Verificar que los índices estén dentro de los límites
-                if nodo_actual_indice < cd.len()
-                    && nodo_siguiente_indice < cd[nodo_actual_indice].len()
-                {
-                    distancia_ruta += cd[nodo_actual_indice][nodo_siguiente_indice] as u32;
-                } else {
-                    es_factible = false;
-                    break;
-                }
+                distancia_ruta += cd[nodo_actual_indice][nodo_siguiente_indice] as u32;
             }
 
             // Calcular demanda total de la ruta (excluyendo depósito)

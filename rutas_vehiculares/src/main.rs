@@ -73,6 +73,8 @@ fn rutas_vehiculares(
     for (i, ruta) in mejor_solucion.rutas.iter().enumerate() {
         println!("Ruta {}: {:?}", i + 1, ruta);
     }
+    println!();
+    println!("Valor optimo encontrado: {}", mejor_solucion.costo_total);
 }
 
 fn main() {
@@ -111,6 +113,10 @@ fn main() {
         max_iteraciones,
         importancia_distancia,
         importancia_feromona,
-        filepath,
+        filepath.clone(),
     );
+
+    if let Some(valor_optimo) = leer_valor_optimo(&filepath) {
+        println!("Valor óptimo conocido: {}", valor_optimo);
+    }
 }

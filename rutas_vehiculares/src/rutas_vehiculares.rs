@@ -541,3 +541,35 @@ pub fn leer_matriz(path: String) -> DatosVRP {
         n_vehiculos,
     }
 }
+
+pub fn leer_valor_optimo(filepath_vrp: &str) -> Option<u32> {
+    use std::fs::File;
+    use std::io::{BufRead, BufReader};
+
+    // Cambiar extensión de .vrp a .sol
+    let filepath_sol = filepath_vrp.replace(".vrp", ".sol");
+
+    // Intentar abrir el archivo .sol
+    let file = match File::open(&filepath_sol) {
+        Ok(f) => f,
+        Err(_) => return None, // Si no existe, devolver None
+    };
+
+    let reader = BufReader::new(file);
+
+    // Buscar la línea que contiene "Cost"
+    for linea in reader.lines() {
+        if let Ok(linea_contenido) = linea {
+            let linea_trim = linea_contenido.trim();
+            if linea_trim.starts_with("Cost ") {
+                // Extraer el número después de "Cost "
+                let costo_str = linea_trim["Cost ".len()..].trim();
+                if let Ok(costo) = costo_str.parse::<u32>() {
+                    return Some(costo);
+                }
+            }
+        }
+    }
+
+    None // Si no se encuentra el costo
+}

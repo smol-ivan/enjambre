@@ -6,6 +6,8 @@ use csv::Writer;
 use serde::Serialize;
 use std::env;
 use std::fs::create_dir_all;
+use std::fs::File;
+use std::io::Write;
 use std::path::Path;
 
 #[derive(Serialize)]
@@ -26,7 +28,7 @@ fn rutas_vehiculares(
     importancia_feromona: f64,
     filepath: String,
     test: bool,
-) -> usize {
+) -> Solucion {
     let datos = leer_matriz(filepath);
 
     // Inicializacion de conjunto de aristas, feromonas y distancias
@@ -94,8 +96,7 @@ fn rutas_vehiculares(
         }
         println!();
     }
-    // println!("Valor optimo encontrado: {}", mejor_solucion.costo_total);
-    mejor_solucion.costo_total as usize
+    mejor_solucion
 }
 
 fn main() {
@@ -143,6 +144,8 @@ fn main() {
 
         let mut writer = Writer::from_path(&csv_path).expect("No se pudo crear el archivo CSV");
 
+        let mut mejores: Vec<Option<(usize, Vec<Vec<u32>>)>> = vec![None; 5];
+
         for i in 0..30 {
             let mut resultados = vec![0; 5];
             for j in 0..=4 {
@@ -172,7 +175,8 @@ fn main() {
                     i_d = 1.0;
                     i_f = 1.0;
                 }
-                resultados[j] = rutas_vehiculares(
+                // Devolver costo y solución completa
+                let sol = rutas_vehiculares(
                     n_hormigas,
                     rho,
                     max_iteraciones,
@@ -181,21 +185,42 @@ fn main() {
                     filepath.clone(),
                     test,
                 );
+                resultados[j] = sol.costo_total;
+                // Actualizar mejor solución si es primera vez o encontramos menor costo
+                let rutas = sol.rutas;
+                if mejores[j]
+                    .as_ref()
+                    .map_or(true, |m| sol.costo_total < m.0 as u32)
+                {
+                    mejores[j] = Some((sol.costo_total as usize, rutas.clone()));
+                }
             }
             let fila = Fila {
                 ejec: i + 1,
-                mas_importancia_distancia: resultados[0],
-                solo_distancia: resultados[1],
-                solo_feromona: resultados[2],
-                mas_importancia_feromona: resultados[3],
-                importancia_ambas: resultados[4],
+                mas_importancia_distancia: resultados[0] as usize,
+                solo_distancia: resultados[1] as usize,
+                solo_feromona: resultados[2] as usize,
+                mas_importancia_feromona: resultados[3] as usize,
+                importancia_ambas: resultados[4] as usize,
             };
             writer.serialize(fila).expect("No se pudo escribir la fila");
         }
         println!();
         writer.flush().expect("No se pudo guardar el archivo CSV");
+        // Mejores soluciones a un archivo de texto
+        let txt_path = format!("{}/solutions_{}.txt", dir, file_stem);
+        let mut f = File::create(&txt_path).expect("No se pudo crear el archivo de soluciones");
+        for (idx, opt) in mejores.into_iter().enumerate() {
+            if let Some((cost, rutas)) = opt {
+                writeln!(f, "=== Configuración {} ===", idx + 1).unwrap();
+                writeln!(f, "Costo: {}", cost).unwrap();
+                writeln!(f, "Rutas: {:?}", rutas).unwrap();
+                writeln!(f).unwrap();
+            }
+        }
+        println!("Soluciones guardadas en {}", txt_path);
     } else {
-        let mejor_costo = rutas_vehiculares(
+        let sol = rutas_vehiculares(
             n_hormigas,
             rho,
             max_iteraciones,
@@ -207,6 +232,6 @@ fn main() {
         if let Some(valor_optimo) = leer_valor_optimo(&filepath) {
             println!("Valor óptimo conocido: {}", valor_optimo);
         }
-        println!("Costo de la mejor solución: {}", mejor_costo);
+        println!("Costo de la mejor solución: {}", sol.costo_total);
     }
 }

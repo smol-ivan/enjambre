@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use rand::prelude::*;
 
 pub type NodoId = u32;
@@ -202,15 +204,17 @@ fn seleccion_ruleta(
         return vertices_factibles.first().copied();
     }
 
-    // Probabilidad de transición entre nodos
-    // p_ij = (τ_ij^α * η_ij^β) / Σ(τ_ik^α * η_ik^β)
-    // donde τ_ij es la feromona, η_ij es (1/distancia)
+    let origen_indice = (origen - 1) as usize;
 
-    let mut probabilidades: Vec<f64> = Vec::new();
+    let mut rng = rand::rng();
+    let umbral: f64 = rng.random_range(0.0..=1.0);
+
+    let mut proporcion = 0.0;
+
+    let mut valores_probabilidad: Vec<(NodoId, f64)> = Vec::new();
     let mut suma_total = 0.0;
 
     for &destino in vertices_factibles {
-        let origen_indice = (origen - 1) as usize;
         let destino_indice = (destino - 1) as usize;
 
         let feromona_ij = cf[origen_indice][destino_indice];
@@ -221,35 +225,30 @@ fn seleccion_ruleta(
             return Some(destino);
         }
 
-        // mayor preferencia a distancias cortas
-        let heuristica_ij = 1.0 / distancia_ij as f64;
+        // Mayor preferencia a distancias cortas
+        let visibilidad_ij = 1.0 / distancia_ij as f64;
 
-        // Aplicar las importancias (exponentes)
-        let valor = feromona_ij.powf(i_f) * heuristica_ij.powf(i_d);
+        // Aplicar las importancias (exponentes): τ_ij^α * η_ij^β
+        let valor = feromona_ij.powf(i_f) * visibilidad_ij.powf(i_d);
 
-        probabilidades.push(valor);
+        valores_probabilidad.push((destino, valor));
         suma_total += valor;
     }
 
-    // Normalizar probabilidades
-    for prob in &mut probabilidades {
-        *prob /= suma_total;
+    let mut vertices_disponibles = valores_probabilidad;
+    let mut nodo_j = None;
+
+    while proporcion < umbral && !vertices_disponibles.is_empty() {
+        let indice_aleatorio = rng.random_range(0..vertices_disponibles.len());
+        let (j_seleccionado, valor_j) = vertices_disponibles[indice_aleatorio];
+        nodo_j = Some(j_seleccionado);
+
+        proporcion += valor_j / suma_total;
+
+        vertices_disponibles.remove(indice_aleatorio);
     }
 
-    // Selección por ruleta
-    let mut rng = rand::rng();
-    let umbral: f64 = rng.random_range(0.0..=1.0);
-    let mut acumulado = 0.0;
-
-    for (i, &prob) in probabilidades.iter().enumerate() {
-        acumulado += prob;
-        if acumulado >= umbral {
-            return Some(vertices_factibles[i]);
-        }
-    }
-
-    // En caso de error de redondeo, devolver el último elemento
-    vertices_factibles.last().copied()
+    nodo_j
 }
 
 pub fn evapozacion_feromona(_ca: &ConjuntoAristas, cf: &mut ConjuntoFeromonas, p: Rho) {
@@ -305,9 +304,9 @@ pub fn actualizacion_feromona(
 pub fn evaluacion_soluciones(
     h: &Hormigas,
     cd: &ConjuntoDistancias,
-    capacidad_maxima: u32,
+    _capacidad_maxima: u32,
     n_vehiculos: u32,
-    clientes: &Vec<Cliente>,
+    _clientes: &Vec<Cliente>,
 ) -> Evaluaciones {
     let mut evaluaciones: Evaluaciones = Vec::with_capacity(h.len());
 
@@ -325,18 +324,13 @@ pub fn evaluacion_soluciones(
             continue;
         }
 
-        let mut es_factible = true;
+        let es_factible = true;
 
         // Evaluar cada ruta de la hormiga
         for ruta in &hormiga.rutas {
-            if ruta.len() < 2 {
-                continue; // Ruta vacía o con solo el depósito, saltar
-            }
+            let mut costo_ruta = 0u32;
 
-            let mut distancia_ruta = 0u32;
-            let mut demanda_ruta = 0u32;
-
-            // Calcular distancia y demanda total de la ruta
+            // Calcular costo total de la ruta
             for ventana in ruta.windows(2) {
                 let nodo_actual_id = ventana[0];
                 let nodo_siguiente_id = ventana[1];
@@ -344,43 +338,9 @@ pub fn evaluacion_soluciones(
                 let nodo_actual_indice = (nodo_actual_id - 1) as usize;
                 let nodo_siguiente_indice = (nodo_siguiente_id - 1) as usize;
 
-                distancia_ruta += cd[nodo_actual_indice][nodo_siguiente_indice] as u32;
+                costo_ruta += cd[nodo_actual_indice][nodo_siguiente_indice] as u32;
             }
-
-            // Calcular demanda total de la ruta (excluyendo depósito)
-            for &nodo_id in ruta.iter() {
-                if let Some(cliente) = clientes.iter().find(|c| c.id == nodo_id) {
-                    demanda_ruta += cliente.demanda;
-                }
-            }
-
-            // Verificar restricción de capacidad
-            if demanda_ruta > capacidad_maxima {
-                es_factible = false;
-            }
-
-            costo_total += distancia_ruta;
-        }
-
-        // Verificar que todos los clientes fueron visitados
-        let mut clientes_visitados: Vec<NodoId> = Vec::new();
-        for ruta in &hormiga.rutas {
-            for &nodo_id in ruta.iter() {
-                if clientes.iter().any(|c| c.id == nodo_id) {
-                    clientes_visitados.push(nodo_id);
-                }
-            }
-        }
-
-        // Remover duplicados y verificar que se visitaron todos los clientes
-        clientes_visitados.sort();
-        clientes_visitados.dedup();
-
-        let mut clientes_esperados: Vec<NodoId> = clientes.iter().map(|c| c.id).collect();
-        clientes_esperados.sort();
-
-        if clientes_visitados != clientes_esperados {
-            es_factible = false;
+            costo_total += costo_ruta;
         }
 
         let evaluacion = EvaluacionSolucion {

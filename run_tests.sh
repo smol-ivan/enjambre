@@ -1,6 +1,9 @@
 #!/bin/bash
 set -euo pipefail
- 
+
+# Capturar Ctrl+C y otras señales para limpiar procesos en background
+trap 'echo "\nInterrumpido. Deteniendo procesos en segundo plano..."; jobs -p | xargs -r kill; exit 1' SIGINT SIGTERM
+
 echo "=== Iniciando script de prueba: $(date) ==="
 echo "Directorio inicial: $(pwd)"
 

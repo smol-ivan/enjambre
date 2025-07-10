@@ -280,12 +280,10 @@ pub fn actualizacion_feromona(
     for (index, hormiga) in h.iter().enumerate() {
         let evaluacion = &evaluaciones[index];
 
-        // Solo actualizar por completo lasferomonas si la solución es factible
-        let aportacion: Feromona = if evaluacion.es_factible {
-            1.0 / evaluacion.costo_total as Feromona
-        } else {
-            0.01
-        };
+        if !evaluacion.es_factible {
+            continue;
+        }
+        let aportacion: Feromona = 1.0 / evaluacion.costo_total as Feromona;
 
         for ruta in &hormiga.rutas {
             // Para cada arista de la ruta (nodo_i -> nodo_j)

@@ -214,7 +214,11 @@ fn main() {
             if let Some((cost, rutas)) = opt {
                 writeln!(f, "=== Configuración {} ===", idx + 1).unwrap();
                 writeln!(f, "Costo: {}", cost).unwrap();
-                writeln!(f, "Rutas: {:?}", rutas).unwrap();
+                // Escribir cada ruta en línea separada
+                for (ri, ruta) in rutas.iter().enumerate() {
+                    let seq: Vec<String> = ruta.iter().map(|node| node.to_string()).collect();
+                    writeln!(f, "Route #{}: {}", ri + 1, seq.join(" ")).unwrap();
+                }
                 writeln!(f).unwrap();
             }
         }

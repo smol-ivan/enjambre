@@ -11,23 +11,22 @@ pub struct Configuracion {
 //
 /// DEFINICION DE CONSTANTES PARA MODELO DE VELOCIDAD
 /// INERCIA
-const INERCIA: f64 = 0.729; 
-const DIMENSIONES: usize = 2; 
+const INERCIA: f64 = 0.729;
+const DIMENSIONES: usize = 2;
 //
 
 ///
 /// DEFINICION DE FUNCIONES OBJETIVO
 ///
 
-trait FuncionObjetivo {
+pub trait FuncionObjetivo {
     fn evaluar(&self, posicion: &Vec<f64>) -> f64;
     fn min_posicion(&self) -> f64;
     fn max_posicion(&self) -> f64;
-    fn nombre(&self) -> &str;
     fn optimo_teorico(&self) -> (Vec<f64>, f64);
 }
 
-struct FuncionEsfera;
+pub struct FuncionEsfera;
 
 impl FuncionObjetivo for FuncionEsfera {
     fn evaluar(&self, posicion: &Vec<f64>) -> f64 {
@@ -44,7 +43,7 @@ impl FuncionObjetivo for FuncionEsfera {
     }
 }
 
-struct FuncionRosenbrock;
+pub struct FuncionRosenbrock;
 
 impl FuncionObjetivo for FuncionRosenbrock {
     fn evaluar(&self, posicion: &Vec<f64>) -> f64 {
@@ -67,7 +66,7 @@ impl FuncionObjetivo for FuncionRosenbrock {
     }
 }
 
-struct FuncionRastrigin;
+pub struct FuncionRastrigin;
 
 impl FuncionObjetivo for FuncionRastrigin {
     fn evaluar(&self, posicion: &Vec<f64>) -> f64 {
@@ -90,7 +89,7 @@ impl FuncionObjetivo for FuncionRastrigin {
     }
 }
 
-struct FuncionSchwefel;
+pub struct FuncionSchwefel;
 
 impl FuncionObjetivo for FuncionSchwefel {
     fn evaluar(&self, posicion: &Vec<f64>) -> f64 {
@@ -109,7 +108,7 @@ impl FuncionObjetivo for FuncionSchwefel {
     }
 }
 
-struct FuncionAckley;
+pub struct FuncionAckley;
 
 impl FuncionObjetivo for FuncionAckley {
     fn evaluar(&self, posicion: &Vec<f64>) -> f64 {
@@ -132,9 +131,6 @@ impl FuncionObjetivo for FuncionAckley {
     fn max_posicion(&self) -> f64 {
         32.768
     }
-    fn nombre(&self) -> &str {
-        "Función Ackley"
-    }
     fn optimo_teorico(&self) -> (Vec<f64>, f64) {
         (vec![0.0; DIMENSIONES], 0.0)
     }
@@ -149,7 +145,7 @@ struct Particula {
 }
 
 impl Particula {
-    fn new<F: FuncionObjetivo>(funcion: &F) -> Self {
+    fn new(funcion: &dyn FuncionObjetivo) -> Self {
         let mut rng = rand::thread_rng();
         let mut posicion = Vec::new();
         let mut velocidad = Vec::new();
@@ -170,12 +166,12 @@ impl Particula {
         }
     }
 
-    fn actualizar<F: FuncionObjetivo>(
+    fn actualizar(
         &mut self,
         mejor_global: &Vec<f64>,
         c1: f64,
         c2: f64,
-        funcion: &F,
+        funcion: &dyn FuncionObjetivo,
     ) {
         let mut rng = rand::thread_rng();
 
@@ -183,7 +179,6 @@ impl Particula {
             let r1: f64 = rng.gen_range(0.0..1.0);
             let r2: f64 = rng.gen_range(0.0..1.0);
 
-            let vel_anterior = self.velocidad[i];
             let componente_inercia = INERCIA * self.velocidad[i];
             let componente_personal =
                 c1 * r1 * (self.mejor_posicion_personal[i] - self.posicion[i]);
@@ -194,7 +189,6 @@ impl Particula {
             self.velocidad[i] = componente_inercia + componente_personal + componente_global;
 
             // Actualizar posición
-            let pos_anterior = self.posicion[i];
             self.posicion[i] += self.velocidad[i];
 
             // Solo mantener las cotas del dominio de la función
@@ -203,7 +197,6 @@ impl Particula {
             } else if self.posicion[i] < funcion.min_posicion() {
                 self.posicion[i] = funcion.min_posicion();
             }
-
         }
 
         // Evaluar nueva posición
@@ -217,7 +210,7 @@ impl Particula {
     }
 }
 
-fn inicializar_poblacion<F: FuncionObjetivo>(pob: usize, funcion: &F) -> Vec<Particula> {
+fn inicializar_poblacion(pob: usize, funcion: &dyn FuncionObjetivo) -> Vec<Particula> {
     (0..pob).map(|_| Particula::new(funcion)).collect()
 }
 
@@ -237,17 +230,14 @@ fn encontrar_mejor_global(poblacion: &Vec<Particula>) -> (Vec<f64>, f64) {
     )
 }
 
-pub fn pso<F: FuncionObjetivo>(
-    config: Configuracion,
-    funcion: F,
-) -> (Vec<f64>, f64) {
-    let mut poblacion = inicializar_poblacion(config.poblacion, &funcion);
+pub fn pso(config: Configuracion, funcion: Box<dyn FuncionObjetivo>) -> (Vec<f64>, f64) {
+    let mut poblacion = inicializar_poblacion(config.poblacion, funcion.as_ref());
 
     let (mut mejor_global, mut mejor_valor_global) = encontrar_mejor_global(&poblacion);
 
     for _ in 1..=config.max_iter {
         for particula in &mut poblacion {
-            particula.actualizar(&mejor_global, config.c1, config.c2, &funcion);
+            particula.actualizar(&mejor_global, config.c1, config.c2, funcion.as_ref());
         }
 
         let (nuevo_mejor_global, nuevo_mejor_valor) = encontrar_mejor_global(&poblacion);

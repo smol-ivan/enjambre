@@ -15,21 +15,24 @@ fn main() {
 
     let config = Configuracion {
         max_iter: args[1].parse().expect("MAX_ITER debe ser un número válido"),
-        debug: args[2].parse().expect("DEBUG debe ser un booleano (true/false)"),
-        poblacion: args[3].parse().expect("POBLACION debe ser un número válido"),
+        debug: args[2]
+            .parse()
+            .expect("DEBUG debe ser un booleano (true/false)"),
+        poblacion: args[3]
+            .parse()
+            .expect("POBLACION debe ser un número válido"),
 
         c1: args[5].parse().expect("c1 debe ser un número válido"),
         c2: args[6].parse().expect("c2 debe ser un número válido"),
     };
 
-    let funcion = match args[4].as_str() {
-        "1" => FuncionEsfera,
-        "2" => FuncionRosenbrock,
-        "3" => FuncionRastrigin,
-        "4" => FuncionSchwefel,
-        "5" => FuncionAckley,
+    let funcion: Box<dyn FuncionObjetivo> = match args[4].as_str() {
+        "1" => Box::new(FuncionEsfera),
+        "2" => Box::new(FuncionRastrigin),
+        "3" => Box::new(FuncionSchwefel),
+        "4" => Box::new(FuncionAckley),
         _ => {
-            eprintln!("Función objetivo no válida. Use '1' ~ '5'.");
+            eprintln!("Función objetivo no válida. Use '1' ~ '4'.");
             return;
         }
     };

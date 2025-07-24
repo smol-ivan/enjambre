@@ -7,7 +7,7 @@ fn main() {
     let args: Vec<String> = env::args().collect();
     if args.len() < 8 {
         eprintln!(
-            "Uso: {} <MAX_ITER> <DEBUG> <POBLACION> <FUNCION_OBJETIVO> <MODELO_VELOCIDAD> <c1> <c2>",
+            "Uso: {} <MAX_ITER> <DEBUG> <POBLACION> <FUNCION_OBJETIVO> <MODELO_VELOCIDAD> <TOPOLOGIA> <c1> <c2>",
             args[0]
         );
         eprintln!("FUNCION_OBJETIVO: 1=Esfera, 2=Rastrigin, 3=Schwefel, 4=Ackley");
@@ -47,8 +47,18 @@ fn main() {
         "barebones" => Box::new(ModeloBarebones),
         _ => {
             eprintln!(
-                "Modelo de velocidad no válido. Use 'Inercia)', 'constriccion' o 'barebones'."
+                "Modelo de velocidad no válido. Use 'Inercia', 'constriccion' o 'barebones'."
             );
+            return;
+        }
+    };
+
+    let topologia: Box<dyn Topologia> = match args[6].as_str() {
+        "anillo" => Box::new(Anillo),
+        "estrella" => Box::new(Estrella),
+        "malla" => Box::new(Malla),
+        _ => {
+            eprintln!("Topologia de vecindario no valido. Use 'anillo', 'estrella', 'malla'");
             return;
         }
     };

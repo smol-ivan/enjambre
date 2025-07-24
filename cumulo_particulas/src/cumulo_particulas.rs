@@ -14,7 +14,17 @@ pub struct Configuracion {
 ///
 const INERCIA: f64 = 0.729;
 const FACTOR_CONSTRICCION: f64 = 0.7298;
+
+///
+/// DEFINICION DE CONSTANTES PARA ALGORITMO
+///
 const DIMENSIONES: usize = 2;
+
+///
+/// DEFINICION DE CONSTANTES PARA TOPOLOGIA
+///
+const FILAS: usize = 3;
+const COLUMNAS: usize = 3;
 
 ///
 /// DEFINICION DE FUNCIONES OBJETIVO
@@ -118,11 +128,87 @@ impl FuncionObjetivo for FuncionAckley {
     fn max_posicion(&self) -> f64 {
         32.768
     }
-    fn optimo_teorico(&self) -> (Vec<f64>, f64) {
-        (vec![0.0; DIMENSIONES], 0.0)
+}
+
+///
+/// DEFINICION DE TOPOLOGIAS
+///
+
+pub trait Topologia {
+    fn construir_vecindarios(&self, n_particulas: usize) -> Vec<Vec<usize>>;
+}
+
+pub struct Anillo;
+
+impl Topologia for Anillo {
+    fn construir_vecindarios(&self, n_particulas: usize) -> Vec<Vec<usize>> {
+        let mut vecindarios = Vec::with_capacity(n_particulas);
+        for i in 0..n_particulas {
+            let izq = (i - 1 + n_particulas) % n_particulas;
+            let der = (i + 1) % n_particulas;
+            vecindarios.push(vec![izq, i, der]);
+        }
+        vecindarios
     }
 }
 
+pub struct Estrella;
+
+impl Topologia for Estrella {
+    fn construir_vecindarios(&self, n_particulas: usize) -> Vec<Vec<usize>> {
+        let mut vecindarios = Vec::with_capacity(n_particulas);
+        for i in 0..n_particulas {
+            match i {
+                0 => vecindarios.push(vec![0]),
+                _ => vecindarios.push(vec![0, i]),
+            }
+        }
+        vecindarios
+    }
+}
+
+pub struct Malla;
+
+impl Topologia for Malla {
+    fn construir_vecindarios(&self, n_particulas: usize) -> Vec<Vec<usize>> {
+        let mut vecindarios = Vec::with_capacity(n_particulas);
+
+        for i in 0..FILAS {
+            for j in 0..COLUMNAS {
+                let id = i * COLUMNAS + j;
+                // La partícula se incluye a sí misma
+                let mut vecindario = vec![id];
+
+                // Arriba
+                if i > 0 {
+                    let arriba = (i - 1) * COLUMNAS + j;
+                    vecindario.push(arriba);
+                }
+                // Abajo
+                if i < FILAS - 1 {
+                    let abajo = (i + 1) * COLUMNAS + j;
+                    vecindario.push(abajo);
+                }
+                // Izquierda
+                if j > 0 {
+                    let izq = i * COLUMNAS + (j - 1);
+                    vecindario.push(izq);
+                }
+                // Derecha
+                if j < COLUMNAS - 1 {
+                    let der = i * COLUMNAS + (j + 1);
+                    vecindario.push(der);
+                }
+                vecindarios.push(vecindario);
+            }
+        }
+        vecindarios
+    }
+}
+
+///
+/// DEFINICION DE MODELOS DE VELOCIDAD
+///
 pub trait ModeloVelocidad {
     fn actualizar(&self, particula: &mut Particula, mejor_global: &Vec<f64>, c1: f64, c2: f64);
 }

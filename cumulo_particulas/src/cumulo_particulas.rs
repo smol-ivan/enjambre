@@ -1,4 +1,5 @@
 use rand::Rng;
+use rand_distr::{Distribution, Normal};
 
 pub struct Configuracion {
     pub max_iter: usize,
@@ -8,23 +9,20 @@ pub struct Configuracion {
     pub c2: f64,
 }
 
-//
+///
 /// DEFINICION DE CONSTANTES PARA MODELO DE VELOCIDAD
-/// INERCIA
+///
 const INERCIA: f64 = 0.729;
 const FACTOR_CONSTRICCION: f64 = 0.7298;
 const DIMENSIONES: usize = 2;
-//
 
 ///
 /// DEFINICION DE FUNCIONES OBJETIVO
 ///
-
 pub trait FuncionObjetivo {
     fn evaluar(&self, posicion: &Vec<f64>) -> f64;
     fn min_posicion(&self) -> f64;
     fn max_posicion(&self) -> f64;
-    fn optimo_teorico(&self) -> (Vec<f64>, f64);
 }
 
 pub struct FuncionEsfera;
@@ -38,9 +36,6 @@ impl FuncionObjetivo for FuncionEsfera {
     }
     fn max_posicion(&self) -> f64 {
         5.12
-    }
-    fn optimo_teorico(&self) -> (Vec<f64>, f64) {
-        (vec![0.0; DIMENSIONES], 0.0)
     }
 }
 
@@ -62,9 +57,6 @@ impl FuncionObjetivo for FuncionRosenbrock {
     fn max_posicion(&self) -> f64 {
         2.048
     }
-    fn optimo_teorico(&self) -> (Vec<f64>, f64) {
-        (vec![1.0; DIMENSIONES], 0.0)
-    }
 }
 
 pub struct FuncionRastrigin;
@@ -85,9 +77,6 @@ impl FuncionObjetivo for FuncionRastrigin {
     fn max_posicion(&self) -> f64 {
         5.12
     }
-    fn optimo_teorico(&self) -> (Vec<f64>, f64) {
-        (vec![0.0; DIMENSIONES], 0.0)
-    }
 }
 
 pub struct FuncionSchwefel;
@@ -103,9 +92,6 @@ impl FuncionObjetivo for FuncionSchwefel {
     }
     fn max_posicion(&self) -> f64 {
         500.0
-    }
-    fn optimo_teorico(&self) -> (Vec<f64>, f64) {
-        (vec![420.9687; DIMENSIONES], 0.0)
     }
 }
 
@@ -146,6 +132,7 @@ pub struct ModeloInercia;
 impl ModeloVelocidad for ModeloInercia {
     fn actualizar(&self, particula: &mut Particula, mejor_global: &Vec<f64>, c1: f64, c2: f64) {
         let mut rng = rand::thread_rng();
+
         for i in 0..particula.posicion.len() {
             let r1: f64 = rng.gen_range(0.0..1.0);
             let r2: f64 = rng.gen_range(0.0..1.0);
@@ -156,6 +143,10 @@ impl ModeloVelocidad for ModeloInercia {
             let componente_global = c2 * r2 * (mejor_global[i] - particula.posicion[i]);
 
             particula.velocidad[i] = componente_inercia + componente_personal + componente_global;
+        }
+
+        // Actualizar posición
+        for i in 0..particula.posicion.len() {
             particula.posicion[i] += particula.velocidad[i];
         }
     }
@@ -166,6 +157,7 @@ pub struct ModeloConstriccion;
 impl ModeloVelocidad for ModeloConstriccion {
     fn actualizar(&self, particula: &mut Particula, mejor_global: &Vec<f64>, c1: f64, c2: f64) {
         let mut rng = rand::thread_rng();
+
         for i in 0..particula.posicion.len() {
             let r1: f64 = rng.gen_range(0.0..1.0);
             let r2: f64 = rng.gen_range(0.0..1.0);
@@ -174,7 +166,36 @@ impl ModeloVelocidad for ModeloConstriccion {
             let a2 = c2 * r2 * (mejor_global[i] - particula.posicion[i]);
 
             particula.velocidad[i] = FACTOR_CONSTRICCION * (particula.velocidad[i] + a1 + a2);
+        }
+
+        // Actualizar posición
+        for i in 0..particula.posicion.len() {
             particula.posicion[i] += particula.velocidad[i];
+        }
+    }
+}
+
+pub struct ModeloBarebones;
+
+impl ModeloVelocidad for ModeloBarebones {
+    fn actualizar(&self, particula: &mut Particula, mejor_global: &Vec<f64>, _c1: f64, _c2: f64) {
+        let mut rng = rand::thread_rng();
+
+        for i in 0..particula.posicion.len() {
+            // Calcular la media: μd ← (p_besti,d + g_bestd) / 2
+            let mu_d = (particula.mejor_posicion_personal[i] + mejor_global[i]) / 2.0;
+
+            // Calcular la desviación estándar: σd ← |p_besti,d - g_bestd|
+            let sigma_d = (particula.mejor_posicion_personal[i] - mejor_global[i]).abs();
+
+            // Generar nuevo valor: pi,d(t + 1) ~ N(μd, σd)
+            let normal = Normal::new(mu_d, sigma_d).unwrap();
+            particula.posicion[i] = normal.sample(&mut rng);
+        }
+
+        // La velocidad no se usa
+        for i in 0..particula.velocidad.len() {
+            particula.velocidad[i] = 0.0;
         }
     }
 }

@@ -10,6 +10,8 @@ fn main() {
             "Uso: {} <MAX_ITER> <DEBUG> <POBLACION> <FUNCION_OBJETIVO> <MODELO_VELOCIDAD> <c1> <c2>",
             args[0]
         );
+        eprintln!("FUNCION_OBJETIVO: 1=Esfera, 2=Rastrigin, 3=Schwefel, 4=Ackley");
+        eprintln!("MODELO_VELOCIDAD: 1=Inercia, 2=Constricción, 3=Barebones");
         return;
     }
 
@@ -27,21 +29,26 @@ fn main() {
     };
 
     let funcion: Box<dyn FuncionObjetivo> = match args[4].as_str() {
-        "1" => Box::new(FuncionEsfera),
-        "2" => Box::new(FuncionRastrigin),
-        "3" => Box::new(FuncionSchwefel),
-        "4" => Box::new(FuncionAckley),
+        "esfera" => Box::new(FuncionEsfera),
+        "rastrigin" => Box::new(FuncionRastrigin),
+        "schwefel" => Box::new(FuncionSchwefel),
+        "ackley" => Box::new(FuncionAckley),
         _ => {
-            eprintln!("Función objetivo no válida. Use '1' ~ '4'.");
+            eprintln!(
+                "Función objetivo no válida. Use 'esfera', 'rastrigin', 'schwefel', 'ackley'."
+            );
             return;
         }
     };
 
     let modelo_velocidad: Box<dyn ModeloVelocidad> = match args[5].as_str() {
-        "1" => Box::new(ModeloInercia),
-        "2" => Box::new(ModeloConstriccion),
+        "inercia" => Box::new(ModeloInercia),
+        "constriccion" => Box::new(ModeloConstriccion),
+        "barebones" => Box::new(ModeloBarebones),
         _ => {
-            eprintln!("Modelo de velocidad no válido. Use '1' o '2'.");
+            eprintln!(
+                "Modelo de velocidad no válido. Use 'Inercia)', 'constriccion' o 'barebones'."
+            );
             return;
         }
     };

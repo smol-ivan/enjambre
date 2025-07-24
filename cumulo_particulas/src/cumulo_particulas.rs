@@ -12,6 +12,7 @@ pub struct Configuracion {
 /// DEFINICION DE CONSTANTES PARA MODELO DE VELOCIDAD
 /// INERCIA
 const INERCIA: f64 = 0.729;
+const FACTOR_CONSTRICCION: f64 = 0.7298;
 const DIMENSIONES: usize = 2;
 //
 
@@ -136,12 +137,54 @@ impl FuncionObjetivo for FuncionAckley {
     }
 }
 
+pub trait ModeloVelocidad {
+    fn actualizar(&self, particula: &mut Particula, mejor_global: &Vec<f64>, c1: f64, c2: f64);
+}
+
+pub struct ModeloInercia;
+
+impl ModeloVelocidad for ModeloInercia {
+    fn actualizar(&self, particula: &mut Particula, mejor_global: &Vec<f64>, c1: f64, c2: f64) {
+        let mut rng = rand::thread_rng();
+        for i in 0..particula.posicion.len() {
+            let r1: f64 = rng.gen_range(0.0..1.0);
+            let r2: f64 = rng.gen_range(0.0..1.0);
+
+            let componente_inercia = INERCIA * particula.velocidad[i];
+            let componente_personal =
+                c1 * r1 * (particula.mejor_posicion_personal[i] - particula.posicion[i]);
+            let componente_global = c2 * r2 * (mejor_global[i] - particula.posicion[i]);
+
+            particula.velocidad[i] = componente_inercia + componente_personal + componente_global;
+            particula.posicion[i] += particula.velocidad[i];
+        }
+    }
+}
+
+pub struct ModeloConstriccion;
+
+impl ModeloVelocidad for ModeloConstriccion {
+    fn actualizar(&self, particula: &mut Particula, mejor_global: &Vec<f64>, c1: f64, c2: f64) {
+        let mut rng = rand::thread_rng();
+        for i in 0..particula.posicion.len() {
+            let r1: f64 = rng.gen_range(0.0..1.0);
+            let r2: f64 = rng.gen_range(0.0..1.0);
+
+            let a1 = c1 * r1 * (particula.mejor_posicion_personal[i] - particula.posicion[i]);
+            let a2 = c2 * r2 * (mejor_global[i] - particula.posicion[i]);
+
+            particula.velocidad[i] = FACTOR_CONSTRICCION * (particula.velocidad[i] + a1 + a2);
+            particula.posicion[i] += particula.velocidad[i];
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
-struct Particula {
-    posicion: Vec<f64>,
-    velocidad: Vec<f64>,
-    mejor_posicion_personal: Vec<f64>,
-    mejor_valor_personal: f64,
+pub struct Particula {
+    pub posicion: Vec<f64>,
+    pub velocidad: Vec<f64>,
+    pub mejor_posicion_personal: Vec<f64>,
+    pub mejor_valor_personal: f64,
 }
 
 impl Particula {
@@ -150,7 +193,7 @@ impl Particula {
         let mut posicion = Vec::new();
         let mut velocidad = Vec::new();
 
-        for _ in 0..2 {
+        for _ in 0..DIMENSIONES {
             posicion.push(rng.gen_range(funcion.min_posicion()..funcion.max_posicion()));
             velocidad.push(rng.gen_range(-2.0..2.0));
         }
@@ -166,32 +209,9 @@ impl Particula {
         }
     }
 
-    fn actualizar(
-        &mut self,
-        mejor_global: &Vec<f64>,
-        c1: f64,
-        c2: f64,
-        funcion: &dyn FuncionObjetivo,
-    ) {
-        let mut rng = rand::thread_rng();
-
-        for i in 0..2 {
-            let r1: f64 = rng.gen_range(0.0..1.0);
-            let r2: f64 = rng.gen_range(0.0..1.0);
-
-            let componente_inercia = INERCIA * self.velocidad[i];
-            let componente_personal =
-                c1 * r1 * (self.mejor_posicion_personal[i] - self.posicion[i]);
-            let componente_global = c2 * r2 * (mejor_global[i] - self.posicion[i]);
-
-            // Actualizar velocidad
-            // v(t+1) = w * v(t) + c1 * r1 * (p_best - x) + c2 * r2 * (g_best - x)
-            self.velocidad[i] = componente_inercia + componente_personal + componente_global;
-
-            // Actualizar posición
-            self.posicion[i] += self.velocidad[i];
-
-            // Solo mantener las cotas del dominio de la función
+    pub fn evaluar_y_actualizar(&mut self, funcion: &dyn FuncionObjetivo) {
+        // Mantener las cotas del dominio de la función
+        for i in 0..self.posicion.len() {
             if self.posicion[i] > funcion.max_posicion() {
                 self.posicion[i] = funcion.max_posicion();
             } else if self.posicion[i] < funcion.min_posicion() {
@@ -230,14 +250,19 @@ fn encontrar_mejor_global(poblacion: &Vec<Particula>) -> (Vec<f64>, f64) {
     )
 }
 
-pub fn pso(config: Configuracion, funcion: Box<dyn FuncionObjetivo>) -> (Vec<f64>, f64) {
+pub fn pso(
+    config: Configuracion,
+    funcion: Box<dyn FuncionObjetivo>,
+    modelo_velocidad: Box<dyn ModeloVelocidad>,
+) -> (Vec<f64>, f64) {
     let mut poblacion = inicializar_poblacion(config.poblacion, funcion.as_ref());
 
     let (mut mejor_global, mut mejor_valor_global) = encontrar_mejor_global(&poblacion);
 
     for _ in 1..=config.max_iter {
+        // Evaluar y actualizar mejor personal
         for particula in &mut poblacion {
-            particula.actualizar(&mejor_global, config.c1, config.c2, funcion.as_ref());
+            particula.evaluar_y_actualizar(funcion.as_ref());
         }
 
         let (nuevo_mejor_global, nuevo_mejor_valor) = encontrar_mejor_global(&poblacion);
@@ -245,6 +270,11 @@ pub fn pso(config: Configuracion, funcion: Box<dyn FuncionObjetivo>) -> (Vec<f64
         if nuevo_mejor_valor < mejor_valor_global {
             mejor_global = nuevo_mejor_global;
             mejor_valor_global = nuevo_mejor_valor;
+        }
+
+        // Actualizar velocidad y posición
+        for particula in &mut poblacion {
+            modelo_velocidad.actualizar(particula, &mejor_global, config.c1, config.c2);
         }
     }
 
